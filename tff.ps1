@@ -521,6 +521,18 @@ function Get-TerraformBackendDetailsFromCode {
             $TFERemoteDetails['hostname'] = $Matches[1]
             Write-Verbose "Detected Terraform Cloud hostname from code: $($Matches[1])"
         }
+
+        if ($env:TF_CLOUD_HOSTNAME) {
+            $TFERemoteDetails['hostname'] = $env:TF_CLOUD_HOSTNAME
+        }
+
+        if ($env:TF_CLOUD_ORGANIZATION) {
+            $TFERemoteDetails['organization'] = $env:TF_CLOUD_ORGANIZATION
+        }
+
+        if ($env:TF_WORKSPACE) {
+            $TFERemoteDetails['workspace'] = $env:TF_WORKSPACE
+        }
     }
 
     if ($BackendType -eq 'remote') {
