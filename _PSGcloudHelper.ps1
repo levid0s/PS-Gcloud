@@ -157,31 +157,40 @@ function Get-SelOptions {
   }
 
   $SelOptions += New-Object -TypeName PsObject -Property @{
-    Category     = 'Compute'
-    HelpItem     = '[^=c:/file/to/upload.txt]UPLOAD'
-    Hotkey       = '^'
-    MenuIndex    = 6
-    ShellArgsMid = 'compute scp $UseInternalIpCmd --zone=$($sel.zone) ${isRecurse} $script:Param $($sel.name):$dst'
-    ShellType    = 'cmd'
-    TaskPrep     = {
-      if (!$Param) {
-        # $script:Param = Get-FileOrFolderPicker($PWD)
-        $Script:Param = Get-FilePicker($PWD)
-        Write-Debug "Selected file: $Script:Param"
+    Category      = 'Compute'
+    HelpItem      = '[^#=c:/file/to/upload.txt]'
+    Hotkey        = '^'
+    MenuIndex     = 6
+    ShellArgsMid  = 'compute scp $UseInternalIpCmd --zone=$($sel.zone) $Script:RecurseCmd $script:Param $($sel.name):${Script:dst}'
+    ShellType     = 'cmd'
+    TaskPrep      = {
+      if (!$Script:Param) {
+        if ($Param -eq '?' -or $Param -eq '*') {
+          $Script:Param = Get-FolderPicker($PWD)
+          Write-Verbose "Selected folder with picker: $Script:Param"          
+        }
+        elseif ($Param) {
+          $Script:Param = $Param
+        }
+        else {
+          $Script:Param = Get-FilePicker($PWD)
+          Write-Verbose "Selected file with picker: $Script:Param"
+        }      
       }
+      Write-Debug "Param: $Param, ScriptParam: $Script:Param"
       if (!(Test-Path $Script:param)) {
         $Raise_Error = "File or folder ``$param`` not found." ; Throw $Raise_Error     
       }
+      $Script:dst = '/tmp'
       if (Test-Path $Script:param -PathType Container) {
-        $isRecurse = '--recurse'
-        $dst = '/tmp'
+        $Script:RecurseCmd = '--recurse'
       }
       else {
-        $isRecurse = ''
-        $dst = "/tmp/$(Split-Path $Script:param -Leaf)"
+        $Script:RecurseCmd = ''
+        # $dst = "/tmp/$(Split-Path $Script:param -Leaf)"
       }
     }
-    TaskPost     = {
+    TaskPost      = {
       Write-Output "Uploading ``$Script:param`` to ``$dst``.`n"
     }
   }
@@ -993,7 +1002,6 @@ function Invoke-Selections {
   $Param = $Selections.Param
   foreach ($Sel in $Selections.Selections) {
     Write-Debug "Executing selection: ``$sel``"
-    Write-Verbose "Param iS: $Param"
 
     if ($null -ne $SelAction.TaskPrep) {
       Write-Debug "[Invoke-Selections] Starting `$TaskPrep:``$TaskPrep``"

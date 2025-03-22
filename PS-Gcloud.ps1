@@ -28,10 +28,13 @@
     .\PS-Gcloud.ps1 C:web="cat /etc/passwd"     # Execute in-line `cat /etc/passwd` on all hosts with "web" in the name, sequentially in the current shell (no new window).
     .\PS-Gcloud.ps1 D1                          # Describe VM1 in yaml format
     .\PS-Gcloud.ps1 Q                           # Qnly do a listing of the VMs and quit.
+    .\PS-Gcloud.ps1 ^1                          # Select a file using file picker to upload to VM with index 1
+    .\PS-Gcloud.ps1 ^1=?                        # Select a folder using folder picker to upload to VM with index 1 to /tmp
     .\PS-Gcloud.ps1 ^1=c:\windows               # Upload the c:\windows directory to /tmp/windows on VM1
     .\PS-Gcloud.ps1 ^:*=hello.txt               # Upload `./hello.txt` to all VMs in the project
+    .\PS-Gcloud.ps1 ^:rhel=?                    # Select a folder using picker UI to upload to the VMs named *rhel*
     .\PS-Gcloud.ps1 v1=/etc/passwd              # Download /etc/passwd file from VM1 to ./{hostname}-passwd-{timestamp} directory
-    .\PS-Gcloud.ps1 v:web=/var/log/             # Trailing `/` will indicate the target is folder, ie recursive opration. Download folder for *web* VMs
+    .\PS-Gcloud.ps1 v:web=/var/log              # Download /var/log folder from *web* VMs
     .\PS-Gcloud.ps1 -Configurations q           # List configurations and quit
     .\PS-Gcloud.ps1 -ResourceType Disks         # Do stuff with disks like Describe, Snapshot, Delete, Detach, Attach
     .\PS-Gcloud.ps1 -Disks                      # Shorthand switch for -ResourceType Disks. There's a shorthand switch for each ResourceType
