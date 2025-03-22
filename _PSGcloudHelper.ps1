@@ -143,10 +143,9 @@ function Get-SelOptions {
     HelpItem     = 'E[X#=cmd]ECUTE'
     MenuIndex    = 4
     Hotkey       = 'x'
-    ShellArgsMid = 'compute instances get-serial-port-output --zone=$($sel.zone) $($sel.name)'
+    ShellArgsMid = 'compute ssh $UseInternalIpCmd --zone=$($sel.zone) $($sel.name) --command "$param"'
     ShellType    = 'log'
   }
-
   
   $SelOptions += New-Object -TypeName PsObject -Property @{
     Category     = 'Compute'
@@ -159,49 +158,48 @@ function Get-SelOptions {
 
   $SelOptions += New-Object -TypeName PsObject -Property @{
     Category     = 'Compute'
-    HelpItem     = '[^]UPLOAD'
+    HelpItem     = '[^=c:/file/to/upload.txt]UPLOAD'
     Hotkey       = '^'
     MenuIndex    = 6
-    ShellArgsMid = "compute scp $UseInternalIpCmd --zone=$($sel.zone) ${isRecurse} $param $($sel.name):$dst"
+    ShellArgsMid = 'compute scp $UseInternalIpCmd --zone=$($sel.zone) ${isRecurse} $script:Param $($sel.name):$dst'
     ShellType    = 'cmd'
     TaskPrep     = {
-      if (!(Test-Path $param)) {
+      if (!$Param) {
+        # $script:Param = Get-FileOrFolderPicker($PWD)
+        $Script:Param = Get-FilePicker($PWD)
+        Write-Debug "Selected file: $Script:Param"
+      }
+      if (!(Test-Path $Script:param)) {
         $Raise_Error = "File or folder ``$param`` not found." ; Throw $Raise_Error     
       }
-      if (Test-Path $param -PathType Container) {
+      if (Test-Path $Script:param -PathType Container) {
         $isRecurse = '--recurse'
         $dst = '/tmp'
       }
       else {
         $isRecurse = ''
-        $dst = "/tmp/$(Split-Path $param -Leaf)"
+        $dst = "/tmp/$(Split-Path $Script:param -Leaf)"
       }
     }
     TaskPost     = {
-      Write-Output "Uploading ``$param`` to ``$dst``.`n"
+      Write-Output "Uploading ``$Script:param`` to ``$dst``.`n"
     }
   }
 
   $SelOptions += New-Object -TypeName PsObject -Property @{
     Category     = 'Compute'
-    HelpItem     = '[v]DOWNLOAD'
+    HelpItem     = '[v#=/path/to/download]DOWNLOAD'
     Hotkey       = 'v'
     MenuIndex    = 7
-    ShellArgsMid = "compute scp $UseInternalIpCmd $isRecurse --zone=$($sel.zone) $($sel.name):$param $dst"
+    ShellArgsMid = 'compute scp $UseInternalIpCmd --recurse --zone=$($sel.zone) $($sel.name):$param $TaskPrep'
     ShellType    = 'cmd'
     TaskPrep     = {
-      $dst = "$($sel.name)-$(Split-Path $param -Leaf)-$(Get-Date -Format 'yyMMdd-HHmmss')"
-      if ($param[-1] -eq '/') {
-        # Copying a directory
-        $isRecurse = '--recurse'
+      $dstName = "$($sel.name)--$(Get-Date -Format 'yyyyMMdd-HHmmss')--$(Split-Path $param -Leaf)"
+      $Dst = New-Item -ItemType Directory -Path $dstName | Select-Object -ExpandProperty FullName
+      if (${Show-Command}) {
+        Return
       }
-      else {
-        $isRecurse = ''
-        if (!(${Show-Command})) { New-Item -ItemType Directory -Path $dst }
-      }
-    }
-    TaskPost     = {
-      Write-Output "Uploading ``$param`` to ``$dst``.`n"
+      Return $Dst
     }
   }
 
@@ -667,7 +665,6 @@ function Show-Menu {
     $SelfLinkOpts = ',selfLink.scope(v1):label=self_link'
   }
 
-
   $instructions = ($SelOptions | Where-Object MenuHidden -NE $true | Sort-Object -Property MenuIndex | Select-Object -ExpandProperty HelpItem) -join '   '
 
   do {
@@ -793,7 +790,7 @@ function ExtractAnswersByWildcard {
     [array]$Menu
   )
   Write-Debug "[ExtractAnswersByWildcard] Answer= ``$Answer``"
-  [array]$Answers = Select-String -InputObject $Answer -Pattern '^([a-z]{1})?(:([\da-z\-\*]+))?(=(.+))?$' | Select-Object -ExpandProperty Matches | Select-Object -ExpandProperty Groups | Select-Object -ExpandProperty Value
+  [array]$Answers = Select-String -InputObject $Answer -Pattern '^([a-z\^]{1})?(:([\da-z\-\*]+))?(=(.+))?$' | Select-Object -ExpandProperty Matches | Select-Object -ExpandProperty Groups | Select-Object -ExpandProperty Value
 
   if ($null -eq $Answers) {
     Write-Debug "[ExtractAnswersByWildcard] Pattern not matched ``$Answer``"
@@ -930,7 +927,10 @@ function Invoke-Selections {
   }
   else {
     Write-Debug 'ConEmu is running, we can get the path from there.'
-    $ConEmuCmd = (Get-Process conemu -ErrorAction Ignore | Select-Object -First 1 ).Path
+    $ConEmuCmd = (Get-Process conemu* -ErrorAction Ignore | Sort-Object -Property Id | Select-Object -First 1 ).Path
+  }
+  if ($ConEmuCmd) {
+    Write-Debug "Detected ConEmu: $ConEmuCmd"
   }
 
   # YQ detection
@@ -994,11 +994,13 @@ function Invoke-Selections {
   foreach ($Sel in $Selections.Selections) {
     Write-Debug "Executing selection: ``$sel``"
     Write-Verbose "Param iS: $Param"
+
     if ($null -ne $SelAction.TaskPrep) {
       Write-Debug "[Invoke-Selections] Starting `$TaskPrep:``$TaskPrep``"
       $TaskPrep = Invoke-Command -ScriptBlock $SelAction.TaskPrep
       Write-Debug "[Invoke-Selections] `$TaskPrep done:``$TaskPrep``"
     }
+    
     $argListMid = $ExecutionContext.InvokeCommand.ExpandString($SelAction.ShellArgsMid)
     Write-Verbose "argListMid: `"$argListMid`""
     $argList = "$($ExecStyle.shellParams) gcloud $argListMid $($ExecStyle.SleepCmd)"
@@ -1016,6 +1018,12 @@ function Invoke-Selections {
   
     Start-Process $($ExecStyle.ShellCmd) -ArgumentList "$argList " @AdditionalSwitches -Verbose
   
+    if ($null -ne $SelAction.TaskPost) {
+      Write-Debug "[Invoke-Selections] Starting `$TaskPost:"
+      $TaskPost = Invoke-Command -ScriptBlock $SelAction.TaskPost
+      Write-Debug "`$TaskPost done: $TaskPost"
+    }
+
     if ($type -eq 'inline') {
       Write-Host ''
     }
@@ -1055,4 +1063,136 @@ function Install-Script {
   else {
     Write-Output 'INSTALL: $PSScriptRoot already in %PATH%'
   }
+}
+
+function Get-FilePicker($initialDirectory) {
+  [System.Reflection.Assembly]::LoadWithPartialName("System.windows.forms") | Out-Null
+  $OpenFileDialog = New-Object System.Windows.Forms.OpenFileDialog
+  $OpenFileDialog.initialDirectory = $initialDirectory
+  $OpenFileDialog.filter = "All Files (*.*)|*.*"
+  $OpenFileDialog.ShowDialog() | Out-Null
+  $OpenFileDialog.filename
+}
+
+function Get-FolderPicker($initialDirectory) {
+  [System.Reflection.Assembly]::LoadWithPartialName("system.windows.forms") | Out-Null
+  $foldername = New-Object System.Windows.Forms.FolderBrowserDialog
+  $foldername.Description = "Select a folder"
+  $foldername.SelectedPath = $initialDirectory
+  if ($foldername.ShowDialog() -eq "OK") {
+    $folder += $foldername.SelectedPath
+  }
+  return $folder
+}
+  
+Add-Type -AssemblyName System.Windows.Forms
+[System.Windows.Forms.Application]::EnableVisualStyles()
+
+function Get-FileOrFolderPicker($initialDirectory) {
+  # Example usage:
+  # $selectedPath = Get-FileOrFolderPicker "C:\"
+
+  # Create the form
+  $form = New-Object System.Windows.Forms.Form
+  $form.Text = "Select a File or Folder"
+  $form.Size = New-Object System.Drawing.Size(400, 500)
+  $form.StartPosition = "CenterScreen"
+
+  # Create the TreeView
+  $treeView = New-Object System.Windows.Forms.TreeView
+  $treeView.Location = New-Object System.Drawing.Point(10, 10)
+  $treeView.Size = New-Object System.Drawing.Size(360, 400)
+  $treeView.PathSeparator = "\"
+  $form.Controls.Add($treeView) | Out-Null
+
+  # OK Button
+  $okButton = New-Object System.Windows.Forms.Button
+  $okButton.Location = New-Object System.Drawing.Point(150, 420)
+  $okButton.Size = New-Object System.Drawing.Size(75, 23)
+  $okButton.Text = "OK"
+  $okButton.DialogResult = [System.Windows.Forms.DialogResult]::OK
+  $form.AcceptButton = $okButton
+  $form.Controls.Add($okButton) | Out-Null
+
+  # Cancel Button
+  $cancelButton = New-Object System.Windows.Forms.Button
+  $cancelButton.Location = New-Object System.Drawing.Point(230, 420)
+  $cancelButton.Size = New-Object System.Drawing.Size(75, 23)
+  $cancelButton.Text = "Cancel"
+  $cancelButton.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+  $form.CancelButton = $cancelButton
+  $form.Controls.Add($cancelButton) | Out-Null
+
+  # Function to populate TreeView with directories and files
+  function Populate-TreeView($treeView, $path) {
+    $treeView.Nodes.Clear()
+    $rootNode = New-Object System.Windows.Forms.TreeNode($path)
+    $rootNode.Tag = $path
+    [void]$treeView.Nodes.Add($rootNode)
+
+    # Add subdirectories
+    try {
+      $dirs = Get-ChildItem -Path $path -Directory -ErrorAction Stop
+      foreach ($dir in $dirs) {
+        $dirNode = New-Object System.Windows.Forms.TreeNode($dir.Name)
+        $dirNode.Tag = $dir.FullName
+        [void]$dirNode.Nodes.Add("Loading...")
+        [void]$rootNode.Nodes.Add($dirNode)
+      }
+
+      # Add files
+      $files = Get-ChildItem -Path $path -File -ErrorAction Stop
+      foreach ($file in $files) {
+        $fileNode = New-Object System.Windows.Forms.TreeNode($file.Name)
+        $fileNode.Tag = $file.FullName
+        [void]$rootNode.Nodes.Add($fileNode)
+      }
+    }
+    catch {
+      [System.Windows.Forms.MessageBox]::Show("Error accessing $path`: $_", "Error", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+    }
+
+    $rootNode.Expand() | Out-Null
+  }
+
+  # Event to lazy-load subdirectories
+  $treeView.add_BeforeExpand({
+      $node = $_.Node
+      if ($node.Nodes.Count -eq 1 -and $node.Nodes[0].Text -eq "Loading...") {
+        $node.Nodes.Clear()
+        $path = $node.Tag
+        try {
+          $dirs = Get-ChildItem -Path $path -Directory -ErrorAction Stop
+          foreach ($dir in $dirs) {
+            $dirNode = New-Object System.Windows.Forms.TreeNode($dir.Name)
+            $dirNode.Tag = $dir.FullName
+            [void]$dirNode.Nodes.Add("Loading...")
+            [void]$node.Nodes.Add($dirNode)
+          }
+
+          $files = Get-ChildItem -Path $path -File -ErrorAction Stop
+          foreach ($file in $files) {
+            $fileNode = New-Object System.Windows.Forms.TreeNode($file.Name)
+            $fileNode.Tag = $file.FullName
+            [void]$node.Nodes.Add($fileNode)
+          }
+        }
+        catch {
+          [System.Windows.Forms.MessageBox]::Show("Error accessing $path`: $_", "Error", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+        }
+      }
+    })
+
+  # Populate the TreeView with the initial directory
+  if (-not $initialDirectory) { $initialDirectory = "C:\" }
+  Populate-TreeView -treeView $treeView -path $initialDirectory
+
+  # Show the form and return the selected path
+  $form.Topmost = $true
+  $result = $form.ShowDialog()
+
+  if ($result -eq [System.Windows.Forms.DialogResult]::OK -and $treeView.SelectedNode -ne $null) {
+    return $treeView.SelectedNode.Tag
+  }
+  return $null
 }
