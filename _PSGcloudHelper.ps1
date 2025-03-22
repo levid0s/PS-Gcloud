@@ -55,7 +55,7 @@ function Get-LoadOptions {
 
   $LoadOptions += New-Object -TypeName PsObject -Property @{
     Category  = 'Firewall'
-    LoadCmd   = 'gcloud compute firewall-rules list --format=''csv(network.scope(networks):sort=1,name:sort=2,disabled,direction,priority,sourceRanges,destinationRanges,sourceTags,targetTags,logConfig.enable.lower():label=''logging''$SelfLinkOpts)'''
+    LoadCmd   = 'gcloud compute firewall-rules list --format=''csv(network.scope(networks):sort=1,name:sort=2,disabled,direction,priority,sourceRanges,destinationRanges,sourceTags,targetTags,denied,allowed,logConfig.enable.lower():label=''logging''$SelfLinkOpts)'''
     Transform = $null
   }
 
@@ -387,7 +387,7 @@ function Get-SelOptions {
     ShellType    = 'out-gridview'
     TaskPrep     = {
       $global:FirewallRules = $Instances
-      $global:FirewallRulesSelected | Out-GridView -PassThru
+      $global:FirewallRulesSelected = $global:FirewallRules | Out-GridView -PassThru
       Write-Information -InformationAction Continue "Data saved in vars: `$FirewallRules, `$FirewallRulesSelected"
     }
   }
