@@ -834,7 +834,10 @@ function Invoke-TerraformMainRun {
 
         & $TerraformPath $Action $TfArgs 2>&1 | Tee-Object -Variable ProcessOutput
 
-        $script:TfRunUrl = $ProcessOutput -match '^https://.*/runs/run-'
+        $m = $ProcessOutput | Select-String -Pattern '^(https://.*/runs/run-[a-zA-Z0-9]+)' -AllMatches
+        if ($m.Matches.Groups -and $m.Matches.Groups.Length -ge 2) {
+            $script:TfRunUrl = $m.Matches.Groups[1].Value
+        }
 
         if ($LASTEXITCODE -eq 0) {
             Write-Verbose "Terraform ${Action} success."
@@ -1102,6 +1105,9 @@ function Invoke-TfStatePull {
 
     Write-ExecCmd -Arguments @($TerraformPath, 'state pull') -SepateLine:$false
     & $TerraformPath state pull | Set-Content $TempState
+    if ($LASTEXITCODE) {
+        Throw "Error running: $TerraformPath state pull > $TempState"
+    }
 
     # Convert state to YAML if yq is present
     if (Get-Command yq -ErrorAction SilentlyContinue) {
@@ -1212,6 +1218,16 @@ if ($env:TF_ENV_PS_DIR) {
 }
 if ($StateList -or $StateShow -or $StatePull -or $StateRM) {
     $Action = 'state'
+}
+
+## .tfenvps.env file support
+if (Test-Path ".tfenvps.env") {
+    $content = Get-Content ".tfenvps.env"
+    foreach ($line in $content) {
+        $cmd = "`$env:$line"
+        Invoke-Expression $cmd
+    }
+    Write-Host "LOADED: .tfenvps.env"
 }
 
 try {
