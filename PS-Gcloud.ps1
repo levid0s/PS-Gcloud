@@ -36,6 +36,8 @@
     .\PS-Gcloud.ps1 v1=/etc/passwd              # Download /etc/passwd file from VM1 to ./{hostname}-passwd-{timestamp} directory
     .\PS-Gcloud.ps1 v:web=/var/log              # Download /var/log folder from *web* VMs
     .\PS-Gcloud.ps1 -Configurations q           # List configurations and quit
+    .\PS-Gcloud.ps1 -Configurations dev-example # Activate dev-example configuration
+    .\PS-Gcloud.ps1 -Configurations c=dev-tfe   # Create the dev-tfe configuration
     .\PS-Gcloud.ps1 -ResourceType Disks         # Do stuff with disks like Describe, Snapshot, Delete, Detach, Attach
     .\PS-Gcloud.ps1 -Disks                      # Shorthand switch for -ResourceType Disks. There's a shorthand switch for each ResourceType
     .\PS-Gcloud.ps1 -Disks a4="consumer-testvm" # Attach disk 4 to the VM named `consumer-testvm`
@@ -44,6 +46,11 @@
     .\PS-Gcloud.ps1 -SelfLink                   # Add the relative self_link column to the selection table
 
     .\PS-Gcloud.ps1 -Disks a1=consumer-testvm -Show-Command   # Show the equivalent gcloud command instead of executing it
+
+    .\PS-Gcloud.ps1 -Firewall o                # List all firewall rules in an Out-GridView
+    .\PS-Gcloud.ps1 -Firewall s                # List all source tags referenced in Firewall rules
+    .\PS-Gcloud.ps1 -Firewall t                # List all target tags referenced in Firewall rules
+
 
     .LINK
     https://github.com/levid0s/PS-Gcloud

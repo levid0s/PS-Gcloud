@@ -157,13 +157,13 @@ function Get-SelOptions {
   }
 
   $SelOptions += New-Object -TypeName PsObject -Property @{
-    Category      = 'Compute'
-    HelpItem      = '[^#=c:/file/to/upload.txt]'
-    Hotkey        = '^'
-    MenuIndex     = 6
-    ShellArgsMid  = 'compute scp $UseInternalIpCmd --zone=$($sel.zone) $Script:RecurseCmd $script:Param $($sel.name):${Script:dst}'
-    ShellType     = 'cmd'
-    TaskPrep      = {
+    Category     = 'Compute'
+    HelpItem     = '[^#=c:/file/to/upload.txt]'
+    Hotkey       = '^'
+    MenuIndex    = 6
+    ShellArgsMid = 'compute scp $UseInternalIpCmd --zone=$($sel.zone) $Script:RecurseCmd $script:Param $($sel.name):${Script:dst}'
+    ShellType    = 'cmd'
+    TaskPrep     = {
       if (!$Script:Param) {
         if ($Param -eq '?' -or $Param -eq '*') {
           $Script:Param = Get-FolderPicker($PWD)
@@ -190,7 +190,7 @@ function Get-SelOptions {
         # $dst = "/tmp/$(Split-Path $Script:param -Leaf)"
       }
     }
-    TaskPost      = {
+    TaskPost     = {
       Write-Output "Uploading ``$Script:param`` to ``$dst``.`n"
     }
   }
@@ -386,8 +386,9 @@ function Get-SelOptions {
     ShellArgsMid = ''
     ShellType    = 'out-gridview'
     TaskPrep     = {
-      $Instances | Out-GridView
-      return
+      $global:FirewallRules = $Instances
+      $global:FirewallRulesSelected | Out-GridView -PassThru
+      Write-Information -InformationAction Continue "Data saved in vars: `$FirewallRules, `$FirewallRulesSelected"
     }
   }
 
@@ -417,8 +418,10 @@ function Get-SelOptions {
           }
         }
       }
-      $tags.GetEnumerator() | Select-Object -ExpandProperty Value | Sort-Object -Property Key | Out-GridView
-      return
+
+      $global:FirewallTags = $tags.GetEnumerator() | Select-Object -ExpandProperty Value | Sort-Object -Property Key
+      $global:FirewallTagsSelected = $FirewallTags | Out-GridView -PassThru
+      Write-Information -InformationAction Continue "Data saved in vars: `$FirewallTags, `$FirewallTagsSelected"
     }
   }
 
@@ -448,8 +451,9 @@ function Get-SelOptions {
           }
         }
       }
-      $tags.GetEnumerator() | Select-Object -ExpandProperty Value | Sort-Object -Property Key | Out-GridView
-      return
+      $global:FirewallTags = $tags.GetEnumerator() | Select-Object -ExpandProperty Value | Sort-Object -Property Key
+      $global:FirewallTagsSelected = $FirewallTags | Out-GridView -PassThru
+      Write-Information -InformationAction Continue "Data saved in vars: `$FirewallTags, `$FirewallTagsSelected"
     }
   }
 
