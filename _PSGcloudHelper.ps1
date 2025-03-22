@@ -134,7 +134,7 @@ function Get-SelOptions {
     HelpItem     = '[C#=cmd]-INLINE'
     MenuIndex    = 3
     Hotkey       = 'c'
-    ShellArgsMid = 'compute ssh $UseInternalIpCmd --zone=$($sel.zone) $($sel.name) --command `"$($param)`"'
+    ShellArgsMid = 'compute ssh $UseInternalIpCmd --zone=$($sel.zone) $($sel.name) --command "$param"'
     ShellType    = 'inline'
   }
 
@@ -507,7 +507,7 @@ function Get-SelOptions {
     Category     = 'SQL'
     HelpItem     = '[D]ESCRIBE'
     Hotkey       = 'd'
-    ShellArgsMid = 'sql instances describe describe $($sel.name)'
+    ShellArgsMid = 'sql instances describe $($sel.name)'
     ShellType    = 'inlineyq'
   }
 
@@ -984,18 +984,23 @@ function Invoke-Selections {
     }
     'out-gridview' {
     }
+    'show-command' {
+      ${Show-Command} = $true
+    }
     default { $Raise_Error = "Unexpected exec type: $type" ; Throw $Raise_Error }
   }
 
   $Param = $Selections.Param
   foreach ($Sel in $Selections.Selections) {
     Write-Debug "Executing selection: ``$sel``"
+    Write-Verbose "Param iS: $Param"
     if ($null -ne $SelAction.TaskPrep) {
       Write-Debug "[Invoke-Selections] Starting `$TaskPrep:``$TaskPrep``"
       $TaskPrep = Invoke-Command -ScriptBlock $SelAction.TaskPrep
+      Write-Debug "[Invoke-Selections] `$TaskPrep done:``$TaskPrep``"
     }
-    Write-Debug "[Invoke-Selections] `$TaskPrep done:``$TaskPrep``"
     $argListMid = $ExecutionContext.InvokeCommand.ExpandString($SelAction.ShellArgsMid)
+    Write-Verbose "argListMid: `"$argListMid`""
     $argList = "$($ExecStyle.shellParams) gcloud $argListMid $($ExecStyle.SleepCmd)"
     Write-Debug "[Invoke-Selections] `$argList:``$argList``"
     if ($SelAction.ShellType -eq 'out-gridview') {
