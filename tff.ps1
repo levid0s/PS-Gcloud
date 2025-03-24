@@ -15,6 +15,8 @@ param(
     [switch]$StatePull,
     [switch]$StateList,
     [switch]$StateRM,
+    [switch]$GetEditorToken,
+    [switch]$GetCreatorToken,
     [string]$TerraformPath,
     [string]$TerraformVersion,
     [switch]$Upgrade # assuming it's tf init -upgrade
@@ -1095,8 +1097,90 @@ function Invoke-TfStateRM {
     }
 }
 
-function Invoke-TfStatePull {
+function Get-TerraformResourceFromState {
+    [CmdletBinding()]
 
+    param(
+        [Parameter(Mandatory = $true)]$StateJson,
+        [ValidateSet('resource', 'data')][string]$Mode = 'resource',
+        [Parameter(Mandatory = $true)]$Type, # eg. vault_generic_secret
+        [Parameter(Mandatory = $true)]$Name,
+        [Parameter(Mandatory = $false)]$Module = $Null
+    )
+
+    $StateObj = $StateJson | ConvertFrom-Json -ErrorAction Stop
+    $Resource = $StateObj.resources |
+    Where-Object {
+        $_.Type -eq $Type -and
+        $Module -eq $_.Module -and
+        $_.Name -eq $Name -and
+        $_.Mode -eq $Mode
+    }
+
+    return $Resource.instances.attributes
+}
+
+function Invoke-GetRolesetToken {
+    param(
+        [Parameter(Mandatory = $true)][string]$TerraformPath,
+        [string]$RolesetName = 'resource_editor'
+    )
+
+    # Check if old token is still Good
+    Write-ExecCmd -Arguments $TerraformPath, state, pull -SepateLine:$false -Execute | Set-Variable -Name StateJson
+    if ($LASTEXITCODE) {
+        Throw "Error fetching the Terraform state."
+    }
+
+    $Resource = Get-TerraformResourceFromState -StateJson $StateJson -Mode 'data' -Type 'vault_generic_secret' -Name $RolesetName
+    if (!$Resource) {
+        Throw "Data resource not found in the Terraform state."
+    }
+
+    $ExpiresSeconds = $Resource.data.expires_at_seconds
+
+    $origin = New-Object -Type DateTime -ArgumentList 1970, 1, 1, 0, 0, 0, 0
+    $ExpiresDateTime = $origin.AddSeconds($ExpiresSeconds)
+
+    if ($ExpiresDateTime -lt (Get-Date).AddMinutes(10)) {
+        # Token expires in 10 minutes, refresh needed
+        Write-ExecCmd -Arguments @($TerraformPath, 'apply -refresh-only') -SepateLine:$false -Execute
+        if ($LASTEXITCODE) {
+            Throw "Error running: $TerraformPath apply -refresh-only"
+        }
+
+        Write-ExecCmd -Arguments $TerraformPath, state, pull -SepateLine:$false -Execute | Set-Variable -Name StateJson
+        if ($LASTEXITCODE) {
+            Throw "Error fetching the Terraform state."
+        }
+    
+        $Resource = Get-TerraformResourceFromState -StateJson $StateJson -Mode 'data' -Type 'vault_generic_secret' -Name $RolesetName
+        if (!$Resource) {
+            Throw "Data resource not found in the Terraform state."
+        }
+    }
+
+    $Token = $Resource.data.token
+    If (!$Token) {
+        Throw "Token not found in resource."
+    }
+
+    if ($Script:DebugPreference -eq 'Continue') {
+        Write-Debug $Resource.data
+    }
+
+    $global:Token = $token
+    $ExpiresSeconds = $Resource.data.expires_at_seconds
+    $origin = New-Object -Type DateTime -ArgumentList 1970, 1, 1, 0, 0, 0, 0
+    $ExpiresDateTime = $origin.AddSeconds($ExpiresSeconds)
+    $ExpiresDiff = $ExpiresDateTime - (Get-Date)
+    $ExpiresText = "(in " + ('{0:00}:{1:00}' -f $ExpiresDiff.Minutes, $ExpiresDiff.Seconds) + ")"
+
+    $script:WEMessages += @{ 'Header' = 'TOKEN'; 'Arguments' = "->  `$env:CLOUDSDK_AUTH_ACCESS_TOKEN=`$Token"; }
+    $script:WEMessages += @{ 'Header' = 'EXP'; 'Arguments' = "$ExpiresDateTime $ExpiresText"; }
+}
+
+function Invoke-TfStatePull {
     $DownloadDir = "$env:USERPROFILE\Downloads"
     $TempFile = Get-Location | Split-Path -Leaf
     $Suffix = Get-Date -Format 'yyyyMMdd-HHmmss'
@@ -1128,7 +1212,7 @@ function Invoke-TfStatePull {
         $TempState = $TempStateYaml
     }
     
-    # Try opening with code 
+    # Try  openingwith code 
     if (Get-Command code -ErrorAction SilentlyContinue) {
         code -n $TempState
     }
@@ -1151,7 +1235,8 @@ function Write-ExecCmd {
         [switch]$NewLineBefore,
         [switch]$NewLineAfter,
         [string]$HeaderColor = 'Green',
-        [string]$ArgumentsColor = 'White'
+        [string]$ArgumentsColor = 'White',
+        [switch]$Execute
     )
 
     if (!$PSBoundParameters.ContainsKey('SaveToHistory')) {
@@ -1195,6 +1280,11 @@ function Write-ExecCmd {
             catch {
             }
         }
+    }
+
+    if ($Execute) {
+        $cmd = $Arguments -join ' '
+        Invoke-Expression $cmd
     }
 }
 
@@ -1351,6 +1441,14 @@ try {
         Invoke-TfStateShow -TerraformPath $TerraformPath
     }
 
+    if ($GetEditorToken) {
+        Invoke-GetRolesetToken -TerraformPath $TerraformPath
+    }
+
+    if ($GetCreatorToken) {
+        Invoke-GetRolesetToken -TerraformPath $TerraformPath -RolesetName 'project_creator'
+    }
+
     if ($StatePull) {
         Invoke-TfStatePull -TerraformPath $TerraformPath
     }
@@ -1385,7 +1483,7 @@ try {
     }
 
     if ($script:TfRunUrl) {
-        $WEMessages += @{ 'Header' = 'RUNID'; 'Arguments' = "-> $TfRunUrl (`$TfRunUrl)"; }
+        $WEMessages += @{ 'Header' = 'RUNID'; 'Arguments' = "-> $TfRunUrl (start `$TfRunUrl)"; }
         $global:TfRunUrl = $TfRunUrl
     }
 }
