@@ -38,6 +38,118 @@ Write-Verbose 'Verbose ON'
 Write-Debug 'Debug ON'
 Write-Information 'Information ON'
 
+function Filter-TfOutput {
+    # define parameters
+    param
+    (
+        [Parameter(ValueFromPipeline)]
+        [string]
+        $Text,
+    
+        [ValidateRange(-10, 10)]
+        [int]
+        $Param1 = 0
+    )
+  
+    # do initialization tasks
+    begin {
+        $line = 0
+        $Mode = 'none'
+        $SentinelResult = $null
+        $SentinelPolicies = @()
+    }
+  
+    # process pipeline input
+    process {
+        $line++
+        if ($Text -eq 'Organization policy check:') {
+            $Mode = 'sentinel'
+            Write-Debug "Setting Mode to Sentinel."
+            Return
+        }
+
+        
+        if ($Mode -eq 'sentinel') {
+            if ($Text -eq '') {
+                Return
+            }
+            if ($PreviousLine -eq 'value') {
+                $PreviousLine = ''
+                Return
+            }
+            if ($PreviousLine -eq 'description') {
+                $PreviousLine = ''
+                Return
+            }
+
+            $Search = $Text | Select-String -Pattern '^Sentinel Result: (true|false)$'
+            if ($Search) {
+                $SentinelResult = $Search.Matches.Groups[1].Value
+                Write-Debug "Detected Sentinel final result: $SentinelResult"
+                Return
+                Write-Debug "Yoho"
+            }
+
+            $Search = $Text | Select-String -Pattern '^##\sPolicy\s+(\d+)\:\s+([a-zA-Z0-9_/\.-]+)\s+\(([a-z-]+)\)'
+            if ($Search) {
+                $PolicyIx = $Search.Matches.Groups[1].Value
+                $PolicyName = $Search.Matches.Groups[2].Value
+                $PolicyEnf = $Search.Matches.Groups[3].Value
+
+                $SentinelPolicies += [PsCustomObject]@{
+                    Index       = $PolicyIx
+                    Name        = $PolicyName
+                    Enforcement = $PolicyEnf
+                    Result      = $null
+                }
+                Return
+            }
+
+            $Search = $Text | Select-String -Pattern '^Result: (true|false)$'
+            if ($Search) {
+                $PolicyResult = $Search.Matches.Groups[1].Value
+
+                $SentinelPolicies | ? { $_.Name -eq $PolicyName } | % { $_.Result = $PolicyResult }
+                $PolicyName = $null
+                $PolicyIx = $null
+                $PolicyEnf = $null
+                $PolicyResult = $null
+                Return
+            }
+
+            $Search = $Text | Select-String -Pattern '^\./[a-z0-9_\.]+\.sentinel[\d\:]+ - Rule .*'
+            if ($Search) {
+                Return
+            }
+            if ($Text -eq '  Value:') {
+                $PreviousLine = 'value'
+                Return
+            }
+            if ($Text -eq '  Description:') {
+                $PreviousLine = 'description'
+                Return
+            }
+            if ($Text -eq '------------------------------------------------------------------------') {
+                Write-Host "Sentinel Check Result: $SentinelResult"
+                if ($SentinelResult -eq 'false') {
+                    Write-Host ''
+                    $SentinelPolicies
+                    Write-Host ''
+                }
+        
+                $Mode = 'none'
+            }
+        }
+
+        Write-Host "$Text"
+    }
+
+    end {
+        Write-Host "`nExiting Filter-TfOutput.."
+        $global:pol = $SentinelPolicies
+    }
+}
+
 function Get-GoogleTokenTTL {
     param(
         [string]$Token
@@ -819,7 +931,7 @@ function Invoke-TerraformMainRun {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)][string]$TerraformPath,
-        [Parameter(Mandatory = $true)][string]$Action,
+        [Parameter(Mandatory = $true)][string]$Action, # plan, apply, destroy
         [Parameter(Mandatory = $false)][string[]]$TfArgs
     )
 
@@ -834,7 +946,7 @@ function Invoke-TerraformMainRun {
 
         Write-ExecCmd -Arguments @($TerraformPath, $Action, $TfArgs) -NewLineAfter
 
-        & $TerraformPath $Action $TfArgs 2>&1 | Tee-Object -Variable ProcessOutput
+        & $TerraformPath $Action $TfArgs 2>&1 | Tee-Object -Variable ProcessOutput | Filter-TfOutput
 
         $m = $ProcessOutput | Select-String -Pattern '^(https://.*/runs/run-[a-zA-Z0-9]+)' -AllMatches
         if ($m.Matches.Groups -and $m.Matches.Groups.Length -ge 2) {

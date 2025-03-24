@@ -43,7 +43,7 @@ function Get-LoadOptions {
 
   $LoadOptions += New-Object -TypeName PsObject -Property @{
     Category  = 'SQL'
-    LoadCmd   = 'gcloud sql instances list --format=''csv(name:sort=1,database_version,gceZone:label=''location'',settings.availabilityType,settings.tier,ipAddresses[0].ipAddress,state,settings.dataDiskType:label=disk_type,settings.dataDiskSizeGb:label=disk_size,region:label=tmpregion,createTime.date(%Y-%m-%d %H:%M:%S)$SelfLinkOpts)'''
+    LoadCmd   = 'gcloud sql instances list  --sort-by=name --format=''csv(name,database_version,gceZone:label=''location'',settings.availabilityType,settings.tier,ipAddresses[0].ipAddress,state,settings.dataDiskType:label=disk_type,settings.dataDiskSizeGb:label=disk_size,region:label=tmpregion,createTime.date(%Y-%m-%d %H:%M:%S)$SelfLinkOpts)'''
     Transform = $null
   }
 
