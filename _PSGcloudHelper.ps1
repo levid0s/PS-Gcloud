@@ -43,7 +43,7 @@ function Get-LoadOptions {
 
   $LoadOptions += New-Object -TypeName PsObject -Property @{
     Category  = 'SQL'
-    LoadCmd   = 'gcloud sql instances list  --sort-by=name --format=''csv(name,database_version,gceZone:label=''location'',settings.availabilityType,settings.tier,ipAddresses[0].ipAddress,state,settings.dataDiskType:label=disk_type,settings.dataDiskSizeGb:label=disk_size,region:label=tmpregion,createTime.date(%Y-%m-%d %H:%M:%S)$SelfLinkOpts)'''
+    LoadCmd   = 'gcloud sql instances list  --sort-by=name --format=''csv(name,database_version,gceZone:label=''location'',settings.availabilityType,settings.tier,ipAddresses[0].ipAddress,state,settings.dataDiskType:label=disk_type,settings.dataDiskSizeGb:label=disk_size,region:label=tmpregion,sqlNetworkArchitecture,createTime.date(%Y-%m-%d %H:%M:%S)$SelfLinkOpts)'''
     Transform = $null
   }
 
@@ -568,6 +568,14 @@ function Get-SelOptions {
     HelpItem     = 'D[E]LETE'
     Hotkey       = 'e'
     ShellArgsMid = 'sql instances delete $($sel.name)'
+    ShellType    = 'inline'
+  }
+
+  $SelOptions += New-Object -TypeName PsObject -Property @{
+    Category     = 'SQL'
+    HelpItem     = '[U]SERS_LIST'
+    Hotkey       = 'u'
+    ShellArgsMid = 'sql users list --instance=$($sel.name)'
     ShellType    = 'inline'
   }
 

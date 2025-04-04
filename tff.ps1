@@ -68,6 +68,9 @@ function Filter-TfOutput {
             Return
         }
 
+        if ($Text -match "\(known after apply\)$" ) {
+            Return
+        }
         
         if ($Mode -eq 'sentinel') {
             if ($Text -eq '') {
@@ -1250,15 +1253,13 @@ function Invoke-GetRolesetToken {
     }
 
     $ExpiresSeconds = $Resource.data.expires_at_seconds
+    $NowEpoch = [DateTimeOffset]::Now.ToUnixTimeSeconds()
 
-    $origin = New-Object -Type DateTime -ArgumentList 1970, 1, 1, 0, 0, 0, 0
-    $ExpiresDateTime = $origin.AddSeconds($ExpiresSeconds)
-
-    if ($ExpiresDateTime -lt (Get-Date).AddMinutes(10)) {
-        # Token expires in 10 minutes, refresh needed
-        Write-ExecCmd -Arguments @($TerraformPath, 'apply -refresh-only') -SepateLine:$false -Execute
+    if (($ExpiresSeconds - $NowEpoch) -lt 600) {
+        # Token expires in less than 10 minutes, refresh needed
+        Write-ExecCmd -Arguments @($TerraformPath, 'apply -refresh-only -auto-apply') -SepateLine:$false -Execute
         if ($LASTEXITCODE) {
-            Throw "Error running: $TerraformPath apply -refresh-only"
+            Throw "Error running: $TerraformPath apply -refresh-only -auto-apply"
         }
 
         Write-ExecCmd -Arguments $TerraformPath, state, pull -SepateLine:$false -Execute | Set-Variable -Name StateJson
@@ -1284,7 +1285,7 @@ function Invoke-GetRolesetToken {
     $global:Token = $token
     $ExpiresSeconds = $Resource.data.expires_at_seconds
     $origin = New-Object -Type DateTime -ArgumentList 1970, 1, 1, 0, 0, 0, 0
-    $ExpiresDateTime = $origin.AddSeconds($ExpiresSeconds)
+    $ExpiresDateTime = $origin.AddSeconds($ExpiresSeconds).ToLocalTime()
     $ExpiresDiff = $ExpiresDateTime - (Get-Date)
     $ExpiresText = "(in " + ('{0:00}:{1:00}' -f $ExpiresDiff.Minutes, $ExpiresDiff.Seconds) + ")"
 
