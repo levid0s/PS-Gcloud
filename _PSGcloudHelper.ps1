@@ -516,22 +516,61 @@ function Get-SelOptions {
 
   $SelOptions += New-Object -TypeName PsObject -Property @{
     Category     = 'SQL'
+    MenuIndex    = 1
     HelpItem     = '[D]ESCRIBE'
     Hotkey       = 'd'
     ShellArgsMid = 'sql instances describe $($sel.name)'
     ShellType    = 'inlineyq'
   }
+  
+  $SelOptions += New-Object -TypeName PsObject -Property @{
+    Category     = 'SQL'
+    MenuIndex    = 2
+    HelpItem     = '[LD] LIST-DBs'
+    Hotkey       = 'ld'
+    ShellArgsMid = 'sql databases list --instance=$($sel.name)'
+    ShellType    = 'inline'
+  }
+  
+  $SelOptions += New-Object -TypeName PsObject -Property @{
+    Category     = 'SQL'
+    MenuIndex    = 3
+    HelpItem     = '[LU] LIST-USERS'
+    Hotkey       = 'lu'
+    ShellArgsMid = 'sql users list --instance=$($sel.name)'
+    ShellType    = 'inline'
+  }
 
   $SelOptions += New-Object -TypeName PsObject -Property @{
     Category     = 'SQL'
-    HelpItem     = '[L]IST-BACKUPS'
-    Hotkey       = 'l'
+    MenuIndex    = 3.2
+    HelpItem     = '[CD#=val] CREATE-DB'
+    Hotkey       = 'cd'
+    ShellArgsMid = 'sql databases create --instance=$($sel.name) $param'
+    ShellType    = 'inline'
+  }
+  
+  $SelOptions += New-Object -TypeName PsObject -Property @{
+    Category     = 'SQL'
+    MenuIndex    = 3.4
+    HelpItem     = '[CU] CREATE-USER'
+    Hotkey       = 'cu'
+    ShellArgsMid = 'sql users create --instance=$($sel.name) $param'
+    ShellType    = 'inline'
+  }
+
+  $SelOptions += New-Object -TypeName PsObject -Property @{
+    Category     = 'SQL'
+    MenuIndex    = 4
+    HelpItem     = '[LB] LIST-BACKUPS'
+    Hotkey       = 'lb'
     ShellArgsMid = 'sql backups list --instance=$($sel.name)'
     ShellType    = 'inline'
   }
 
   $SelOptions += New-Object -TypeName PsObject -Property @{
     Category     = 'SQL'
+    MenuIndex    = 5
     HelpItem     = '[B]ACKUP'
     Hotkey       = 'b'
     ShellArgsMid = 'sql backups create --instance=$($sel.name)'
@@ -540,6 +579,7 @@ function Get-SelOptions {
 
   $SelOptions += New-Object -TypeName PsObject -Property @{
     Category     = 'SQL'
+    MenuIndex    = 6
     HelpItem     = '[R#=backup-id]ESTORE'
     Hotkey       = 'r'
     ShellArgsMid = 'sql backups restore --restore-instance=$($sel.name)  $param'
@@ -548,6 +588,7 @@ function Get-SelOptions {
 
   $SelOptions += New-Object -TypeName PsObject -Property @{
     Category     = 'SQL'
+    MenuIndex    = 7
     HelpItem     = '[S]TART'
     Hotkey       = 's'
     ShellArgsMid = 'sql instances patch $($sel.name) --activation-policy=ALWAYS'
@@ -556,6 +597,7 @@ function Get-SelOptions {
 
   $SelOptions += New-Object -TypeName PsObject -Property @{
     Category     = 'SQL'
+    MenuIndex    = 8
     HelpItem     = 'S[T]OP'
     Hotkey       = 't'
     ShellArgsMid = 'sql instances patch $($sel.name) --activation-policy=NEVER '
@@ -564,6 +606,7 @@ function Get-SelOptions {
 
   $SelOptions += New-Object -TypeName PsObject -Property @{
     Category     = 'SQL'
+    MenuIndex    = 9
     Confirm      = $true
     HelpItem     = 'D[E]LETE'
     Hotkey       = 'e'
@@ -571,13 +614,6 @@ function Get-SelOptions {
     ShellType    = 'inline'
   }
 
-  $SelOptions += New-Object -TypeName PsObject -Property @{
-    Category     = 'SQL'
-    HelpItem     = '[U]SERS_LIST'
-    Hotkey       = 'u'
-    ShellArgsMid = 'sql users list --instance=$($sel.name)'
-    ShellType    = 'inline'
-  }
 
   ###
   ###  Storage
@@ -690,6 +726,7 @@ function Show-Menu {
 
   do {
     $LoadOptions.LoadCmd = $ExecutionContext.InvokeCommand.ExpandString($LoadOptions.LoadCmd)
+    Write-Information -InformationAction Continue "EXEC: $($LoadOptions.LoadCmd)"
     $output = $(Invoke-Expression $LoadOptions.LoadCmd)
     if ($LASTEXITCODE -ne 0) {
       $Raise_Error = 'Error running gcloud command'; Throw $Raise_Error
@@ -785,10 +822,12 @@ function ExtractAnswersByIndex {
     [string]$Answer,
     [array]$Menu
   )
-  Write-Debug "[ExtractAnswersByIndex] Answer= ``$Answer``"
-  [array]$Answers = Select-String -InputObject $Answer -Pattern '^([a-z\^]{1})?((\d{1,3}))?(=(.+))?$' | Select-Object -ExpandProperty Matches | Select-Object -ExpandProperty Groups | Select-Object -ExpandProperty Value
+
+  Write-Verbose "[ExtractAnswersByIndex] Testing Answer=``$Answer``"
+  [array]$Answers = Select-String -InputObject $Answer -Pattern '^([a-z\^]{1,2})?((\d{1,3}))?(=(.+))?$' | Select-Object -ExpandProperty Matches | Select-Object -ExpandProperty Groups | Select-Object -ExpandProperty Value
 
   if ($null -eq $Answers) {
+    Write-Verbose "[ExtractAnswersByIndex] -> No match"
     return $null
   }
 
@@ -796,13 +835,18 @@ function ExtractAnswersByIndex {
     [array]$Selections = $Menu[$Answers[3] - 1] 
   }
 
-  return @{
+  $Result = @{
     Action     = $Answers[1]
     SelIndex   = $Answers[3]
     Param      = $Answers[5]
     Selections = $Selections
     SelCount   = $Selections.Count
   }
+
+  Write-Verbose "[ExtractAnswersByIndex] Action=``$($Result.Action)``"
+  Write-Verbose "[ExtractAnswersByIndex] Param=``$($Result.Param)``"
+  Write-Verbose "[ExtractAnswersByIndex] Matched selections: -> ``$(($Result.Selections | Format-Table | Out-String).TrimEnd())```n`n"
+  return $Result
 }
 
 function ExtractAnswersByWildcard {
@@ -810,24 +854,30 @@ function ExtractAnswersByWildcard {
     [string]$Answer,
     [array]$Menu
   )
-  Write-Debug "[ExtractAnswersByWildcard] Answer= ``$Answer``"
-  [array]$Answers = Select-String -InputObject $Answer -Pattern '^([a-z\^]{1})?(:([\da-z\-\*]+))?(=(.+))?$' | Select-Object -ExpandProperty Matches | Select-Object -ExpandProperty Groups | Select-Object -ExpandProperty Value
+
+  Write-Verbose "[ExtractAnswersByWildcard] Testing Answer=``$Answer``"
+  
+  [array]$Answers = Select-String -InputObject $Answer -Pattern '^([a-z\^]{1,2})?(:([\da-z\-\*]+))?(=(.+))?$' | Select-Object -ExpandProperty Matches | Select-Object -ExpandProperty Groups | Select-Object -ExpandProperty Value
 
   if ($null -eq $Answers) {
-    Write-Debug "[ExtractAnswersByWildcard] Pattern not matched ``$Answer``"
+    Write-Verbose "[ExtractAnswersByWildcard] -> No match"
     return $null
   }
 
-  $Filter = $Answers[3]
-  [array]$Selections = $Menu | Where-Object name -ilike "*$Filter*"
+  $Filter = "*$($Answers[3])*"
+  [array]$Selections = $Menu | Where-Object name -ilike $Filter
 
-  return @{
+  $Result = @{
     Action     = $Answers[1]
     SelIndex   = $null
     Param      = $Answers[5]
     Selections = $Selections
     SelCount   = $Selections.Count
   }
+  Write-Verbose "[ExtractAnswersByWildcard] Action=``$($Result.Action)``"
+  Write-Verbose "[ExtractAnswersByWildcard] Param=``$($Result.Param)``"
+  Write-Verbose "[ExtractAnswersByWildcard] Matched selections: -> ``$(($Result.Selections | Format-Table | Out-String).TrimEnd())```n`n"
+  return $Result
 }
 
 function DetectUseInternalIpSsh {
@@ -868,10 +918,10 @@ function DisplaySelectionsAndConfirm {
     return
   }
   elseif ($Answers.SelCount -eq 1) {
-    Write-Host "Your selection: $($Answers.Selections[0])"
+    # Write-Verbose "Your selection: $($Answers.Selections[0])"
   }
   else {
-    Write-Host "Your selections: $($Answers.Selections | ft | Out-String)"
+    Write-Host "Your selections:`n$(($Answers.Selections | Format-Table | Out-String).TrimEnd())`n"
     $YesNo = Read-Host 'WARNING: Execute on multiple targets? (yes/no)'
     Write-Host ''
     if (@('y', 'yes') -notcontains $YesNo) {
@@ -889,20 +939,20 @@ function Parse-Answer {
 
   if ($ResourceType -eq 'Configurations' -and $Answer -notmatch '^[a-z]?\d+$' -and $Answer -notmatch '^[a-z]?(:[a-z0-9-_]+)?$' -and $Answer -notmatch '^c=.*') {
     [array]$Answers = ConfigurationsActivateWildcard -Menu $instances -Wildcard $Answer
+    return $Answers
   }
-  else {
-    [array]$Answers = ExtractAnswersByIndex -Answer $Answer -Menu $instances
-    Write-Debug "[ExtractAnswersByIndex] ``$Answer`` -> ``$($Answers.Selections | Out-String)``"
+  
+  [array]$Answers = ExtractAnswersByIndex -Answer $Answer -Menu $instances
+  if ($Answers) {
+    return $Answers
   }
-  if ($null -eq $Answers) {
-    [array]$Answers = ExtractAnswersByWildcard -Answer $Answer -Menu $instances
-    Write-Debug "[ExtractAnswersByWildcard] ``$Answer`` -> ``$($Answers.Selections | Out-String)``"
+  
+  [array]$Answers = ExtractAnswersByWildcard -Answer $Answer -Menu $instances
+  if ($Answers) {
+    return $Answers
   }
-  # if ($null -eq $Answers) {
-  #   $Raise_Error = "[Parse-Answer]: Unable to determine selection based on *$Answer*." ; Throw $Raise_Error     
-  # }
 
-  return $Answers
+  Throw "Could not parse answer: $Answer"
 }
 
 function Find-SelAction {
@@ -912,7 +962,8 @@ function Find-SelAction {
     [psobject]$Selections
   )
 
-  Write-Debug "[Find-SelAction] Selections.Action= ``$($Selections.Action | Out-String)``"
+  Write-Verbose "[Find-SelAction] Looking up command for Action: ${ResourceType}:``$($Selections.Action)``"
+
   if ([string]::IsNullOrEmpty($Selections.Action)) {
     $Action = $SelOptions | Where-Object Default -EQ $true
     if ($null -eq $Action) {
@@ -922,9 +973,10 @@ function Find-SelAction {
   else {
     $Action = $SelOptions | Where-Object Hotkey -EQ $Selections.Action
     if ($null -eq $Action) {
-      $Raise_Error = "[Find-SelAction]: No action defined for ``${ResourceType}``:``$($Selections.Action)``." ; Throw $Raise_Error     
+      $Raise_Error = "[Find-SelAction] No definition found for Action: ${ResourceType}:``$($Selections.Action)``." ; Throw $Raise_Error     
     }
   }
+  Write-Verbose "[Find-SelAction] Action definition found:`n$(($Action | Format-List | Out-String).TrimStart().TrimEnd())`n`n"
   return $Action
 }
 
@@ -936,14 +988,9 @@ function Invoke-Selections {
     ${Show-Command}
   )
 
-  Write-Debug "[Invoke-Selections]: `$Selections: $($Selections | Out-String)"
-  Write-Debug "[Invoke-Selections]: `$SelAction: $($SelAction | Out-String)"
-  Write-Debug '[Invoke-Selections]: >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>'
-
-
   # ConEmu detection
   if (Get-Command -ErrorAction Ignore -Type Application conemu) {
-    Write-Debug 'ConEmu found in path.'
+    Write-Verbose 'ConEmu found in path.'
     $ConEmuCmd = 'conemu'
   }
   else {
@@ -951,12 +998,12 @@ function Invoke-Selections {
     $ConEmuCmd = (Get-Process conemu* -ErrorAction Ignore | Sort-Object -Property Id | Select-Object -First 1 ).Path
   }
   if ($ConEmuCmd) {
-    Write-Debug "Detected ConEmu: $ConEmuCmd"
+    Write-Verbose "Detected ConEmu: $ConEmuCmd"
   }
 
   # YQ detection
   if (Get-Command -ErrorAction Ignore -Type Application yq) {
-    Write-Debug 'YQ found in path.'
+    Write-Verbose 'YQ found in path.'
     $YQCmd = 'yq'
   }
   else {
@@ -1013,18 +1060,18 @@ function Invoke-Selections {
 
   $Param = $Selections.Param
   foreach ($Sel in $Selections.Selections) {
-    Write-Debug "Executing selection: ``$sel``"
+    # Write-Debug "Executing selection: $(($sel | format-Table -HideTableHeaders | Out-String).TrimStart().TrimEnd())"
+    Write-Debug "Executing selection: $($Sel.Name)"
 
     if ($null -ne $SelAction.TaskPrep) {
-      Write-Debug "[Invoke-Selections] Starting `$TaskPrep:``$TaskPrep``"
+      Write-Verbose "[Invoke-Selections] Starting `$TaskPrep:``$TaskPrep``"
       $TaskPrep = Invoke-Command -ScriptBlock $SelAction.TaskPrep
-      Write-Debug "[Invoke-Selections] `$TaskPrep done:``$TaskPrep``"
+      Write-Verbose "[Invoke-Selections] `$TaskPrep done:``$TaskPrep``"
     }
     
     $argListMid = $ExecutionContext.InvokeCommand.ExpandString($SelAction.ShellArgsMid)
-    Write-Verbose "argListMid: `"$argListMid`""
     $argList = "$($ExecStyle.shellParams) gcloud $argListMid $($ExecStyle.SleepCmd)"
-    Write-Debug "[Invoke-Selections] `$argList:``$argList``"
+    Write-Verbose "[Invoke-Selections] `$argList:``$argList``"
     if ($SelAction.ShellType -eq 'out-gridview') {
       return
     }
@@ -1034,7 +1081,9 @@ function Invoke-Selections {
     }  
     $AdditionalSwitches = $ExecStyle.AdditionalSwitches
   
-    Write-Debug "[Invoke-Selections]: `$ExecStyle: $ExecStyle"
+    Write-Verbose "[Invoke-Selections]: `$ExecStyle: $(($ExecStyle|format-table|out-string).TrimEnd())"
+
+    Write-Information -InformationAction Continue "EXEC: gcloud $argListMid"
   
     Start-Process $($ExecStyle.ShellCmd) -ArgumentList "$argList " @AdditionalSwitches -Verbose
   

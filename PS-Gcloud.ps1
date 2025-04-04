@@ -56,6 +56,7 @@
     https://github.com/levid0s/PS-Gcloud
 #>
 
+[CmdletBinding()]
 param(
   [Parameter()][ValidateSet('Backend-Services', 'Compute', 'Configurations', 'Disks', 'Firewall', 'MIG', 'Snapshots', 'SQL', 'Storage')][string]$ResourceType,
   [nullable[bool]]$UseInternalIpSsh,
@@ -77,6 +78,15 @@ param(
   [Switch]$Help,
   [Switch]$HelpFull
 )
+
+if ($PSBoundParameters.ContainsKey('Debug')) {
+  Write-Verbose "Script started with -Debug switch" -Verbose
+  $Script:DebugPreference = 'Continue'
+}
+
+if ($PSBoundParameters.ContainsKey('Verbose')) {
+  Write-Verbose "Script started with -Verbose switch. VerbosePreference=$script:VerbosePreference" -Verbose
+}
 
 if ($Help) {
   Write-Host @'

@@ -1257,9 +1257,9 @@ function Invoke-GetRolesetToken {
 
     if (($ExpiresSeconds - $NowEpoch) -lt 600) {
         # Token expires in less than 10 minutes, refresh needed
-        Write-ExecCmd -Arguments @($TerraformPath, 'apply -refresh-only -auto-apply') -SepateLine:$false -Execute
+        Write-ExecCmd -Arguments @($TerraformPath, 'apply -refresh-only -auto-approve') -SepateLine:$false -Execute
         if ($LASTEXITCODE) {
-            Throw "Error running: $TerraformPath apply -refresh-only -auto-apply"
+            Throw "Error running: $TerraformPath apply -refresh-only -auto-approve"
         }
 
         Write-ExecCmd -Arguments $TerraformPath, state, pull -SepateLine:$false -Execute | Set-Variable -Name StateJson
