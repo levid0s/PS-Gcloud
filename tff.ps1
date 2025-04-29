@@ -860,20 +860,20 @@ function Invoke-TerraformInit {
             }
         }
 
+        "DependencyLockFixNeeded" = @{
+            pattern = 'checksums recorded in the dependency lock file|: locked provider '
+            message = 'Provider lock fix needed.'
+            fix     = {
+                Invoke-TerraformProviderLockFix
+            }
+        }
+
         "InitUpgradeNeeded"       = @{
             pattern = 'Error:.*Failed to query available provider packages'
             message = 'Provider upgrade needed'
             fix     = {
                 Write-Debug "Appending -upgrade to `$TfInitArgs"
                 $script:TfInitArgs += '-upgrade'
-            }
-        }
-
-        "DependencyLockFixNeeded" = @{
-            pattern = 'checksums recorded in the dependency lock file'
-            message = 'Provider lock fix needed.'
-            fix     = {
-                Invoke-TerraformProviderLockFix
             }
         }
     }
@@ -883,10 +883,11 @@ function Invoke-TerraformInit {
     while (!($retries.Values -gt 1)) {
 
         if ($ProcessOutput) {
-            foreach ($fix in $ErrorFixes.GetEnumerator()) {
-                if ($processOutput -match $fix.value.pattern) {
-                    Write-Warning $fix.value.message
-                    Invoke-Command -ScriptBlock $fix.value.fix
+            foreach ($fixKey in ($ErrorFixes.Keys | Sort-Object)) {
+                $fix = $ErrorFixes[$fixKey]
+                if ($processOutput -match $fix.pattern) {
+                    Write-Warning "Applying fix: ${fixKey}: $($fix.message)"
+                    Invoke-Command -ScriptBlock $fix.fix
                     $retries[$fix.Name] += 1
                     Break
                 }
@@ -896,6 +897,7 @@ function Invoke-TerraformInit {
                 Write-Warning "Unknown error, retrying anyway."
                 $retries["UnknownError"] = 2
             }
+
         }
 
         if (Test-Path -Path './tf-init.ps1') {
@@ -1015,13 +1017,13 @@ function Invoke-TerraformProviderLockFix {
         Remove-Item -Path '.terraform.lock.hcl'
     }
 
-    $Params = 'providers lock -platform=windows_amd64 -platform=darwin_amd64 -platform=linux_amd64' -split ' '
-    $TfCmd = @($TerraformPath)
-    $TfCmd += $Params
-    Write-Host 'Attempting providers lock fix..'
-    # Write-Host "`n[ EXEC ]: $($TfCmd -join ' ')" -ForegroundColor Green
-    Write-ExecCmd -Arguments $TfCmd
-    Invoke-Expression "& $TfCmd" | Write-Host
+    # $Params = 'providers lock -platform=windows_amd64 -platform=darwin_amd64 -platform=linux_amd64' -split ' '
+    # $TfCmd = @($TerraformPath)
+    # $TfCmd += $Params
+    # Write-Host 'Attempting providers lock fix..'
+    # # Write-Host "`n[ EXEC ]: $($TfCmd -join ' ')" -ForegroundColor Green
+    # Write-ExecCmd -Arguments $TfCmd
+    # Invoke-Expression "& $TfCmd" | Write-Host
 }
 
 function Invoke-TerraformValidate {
@@ -1257,9 +1259,9 @@ function Invoke-GetRolesetToken {
 
     if (($ExpiresSeconds - $NowEpoch) -lt 600) {
         # Token expires in less than 10 minutes, refresh needed
-        Write-ExecCmd -Arguments @($TerraformPath, 'apply -refresh-only -auto-approve') -SepateLine:$false -Execute
+        Write-ExecCmd -Arguments @($TerraformPath, 'apply -refresh-only -compact-warnings -auto-approve') -SepateLine:$false -Execute | Filter-TfOutput
         if ($LASTEXITCODE) {
-            Throw "Error running: $TerraformPath apply -refresh-only -auto-approve"
+            Throw "Error running: $TerraformPath apply -refresh-only -compact-warnings -auto-approve"
         }
 
         Write-ExecCmd -Arguments $TerraformPath, state, pull -SepateLine:$false -Execute | Set-Variable -Name StateJson
@@ -1286,6 +1288,7 @@ function Invoke-GetRolesetToken {
     $ExpiresSeconds = $Resource.data.expires_at_seconds
     $origin = New-Object -Type DateTime -ArgumentList 1970, 1, 1, 0, 0, 0, 0
     $ExpiresDateTime = $origin.AddSeconds($ExpiresSeconds).ToLocalTime()
+    $global:TokenExp = $ExpiresDateTime
     $ExpiresDiff = $ExpiresDateTime - (Get-Date)
     $ExpiresText = "(in " + ('{0:00}:{1:00}' -f $ExpiresDiff.Minutes, $ExpiresDiff.Seconds) + ")"
 
