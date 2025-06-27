@@ -30,10 +30,11 @@ function Get-LoadOptions {
   }
 
   $LoadOptions += New-Object -TypeName PsObject -Property @{
-    Category  = 'Configurations'
-    LoadCmd   = 'gcloud config configurations list --format=''csv(name,is_active,ACCOUNT,PROJECT)'''
-    Transform = $null
-  }  
+    Category    = 'Configurations'
+    LoadCmd     = 'gcloud config configurations list --format=''csv(name,is_active,ACCOUNT,PROJECT)'''
+    FormatColor = @{ 'True' = 'Green' }
+    Transform   = $null
+  }
 
   $LoadOptions += New-Object -TypeName PsObject -Property @{
     Category  = 'Snapshots'
@@ -708,6 +709,23 @@ function Get-SelOptions {
   return $o
 }
 
+function Format-Color([hashtable] $Colors = @{}, [switch] $SimpleMatch) {
+  # source: https://superuser.com/questions/1709074/color-highlight-a-select-string-powershell
+  $lines = ($input | Out-String) -replace "`r", "" -split "`n"
+  foreach ($line in $lines) {
+    $color = ''
+    foreach ($pattern in $Colors.Keys) {
+      if (!$SimpleMatch -and $line -match $pattern) { $color = $Colors[$pattern] }
+      elseif ($SimpleMatch -and $line -like $pattern) { $color = $Colors[$pattern] }
+    }
+    if ($color) {
+      Write-Host -ForegroundColor $color $line
+    }
+    else {
+      Write-Host $line
+    }
+  }
+}
 
 function Show-Menu {
   param(
@@ -757,7 +775,12 @@ function Show-Menu {
     }
   
     if ([string]::IsNullOrEmpty($Answer) -or $Answer -eq 'q') {    
-      Write-Host $outText
+      if ($LoadOptions.FormatColor) {
+        $outText | Format-Color -Colors $LoadOptions.FormatColor
+      }
+      else {
+        Write-Host $outText
+      }
       Write-Host "$instructions`n"
     }
   

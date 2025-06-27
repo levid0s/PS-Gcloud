@@ -888,7 +888,7 @@ function Invoke-TerraformInit {
                 if ($processOutput -match $fix.pattern) {
                     Write-Warning "Applying fix: ${fixKey}: $($fix.message)"
                     Invoke-Command -ScriptBlock $fix.fix
-                    $retries[$fix.Name] += 1
+                    $retries[$fixKey] += 1
                     Break
                 }
             }
@@ -1599,7 +1599,7 @@ try {
     }
 
     if ($script:TfRunUrl) {
-        $WEMessages += @{ 'Header' = 'RUNID'; 'Arguments' = "-> $TfRunUrl (start `$TfRunUrl)"; }
+        $WEMessages += @{ 'Header' = 'RUNID'; 'Arguments' = "-> $TfRunUrl -> start `$TfRunUrl"; }
         $global:TfRunUrl = $TfRunUrl
     }
 }
