@@ -17,6 +17,7 @@ param(
     [switch]$StateRM,
     [switch]$GetEditorToken,
     [switch]$GetCreatorToken,
+    [string]$GetToken,
     [string]$TerraformPath,
     [string]$TerraformVersion,
     [switch]$Upgrade # assuming it's tf init -upgrade
@@ -315,6 +316,7 @@ function Get-TerraformVersion {
     $Version = switch ($BackendType) {
         'remote' { Get-TerraformVersionRemote -TFERemoteDetails $TFERemoteDetails; Break }
         'cloud' { Get-TerraformVersionRemote -TFERemoteDetails $TFERemoteDetails; Break }
+        'local' { Get-TerraformVersionTfstate; Break }
         'none' { Get-TerraformVersionTfstate; Break }
         # 'none' {}
         Default { Get-TerraformVersionText }
@@ -358,6 +360,7 @@ function Get-TerraformInitDetails {
 }
 
 function Get-TerraformVersionRemote {
+    Write-Debug "Entering: Get-TerraformVersionRemote"
     param(
         $TFERemoteDetails = @()
     )
@@ -376,7 +379,7 @@ function Get-TerraformVersionRemote {
         Throw 'TFERemoteDetails missing.'
     }
 
-    $TfeToken = Get-TfeToken
+    $TfeToken = Get-TfeToken -Hostname $Hostname
 
     $Params = @{
         'Hostname'     = $Hostname
@@ -398,6 +401,7 @@ function Get-TerraformVersionRemote {
 }
 
 function Get-TerraformVersionText {
+    Write-Debug "Entering: Get-TerraformVersionText"
     $Content = Get-Content '*.tf' -ErrorAction Continue
     if ($null -eq $Content) {
         return $null
@@ -445,10 +449,21 @@ function Get-TerraformBackendType {
         # Second attempt, look for `cloud` syntax
         $Search = $Content | Select-String -Pattern 'terraform\s+{[\s\n]*(cloud)'
     }
+
+    if ($Null -eq $Search.Matches) {
+        If (Test-Path -Path './terraform.tfstate') {
+            $State = Get-Content -Path '.\terraform.tfstate' | ConvertFrom-Json
+            if ($State) {
+                return 'local'
+            }
+        }
+    }
+
     if ($Null -eq $Search.Matches) {
         Write-Debug 'Detected backend: None'
         return 'none'
     }
+    
     $script:BackendType = $Search.Matches[0].Groups[1].Value
     Write-Debug "Detected backend: $BackendType"
 
@@ -465,17 +480,20 @@ function Get-TfeToken {
         if (!$Hostname) {
             $Hostname = '.*'
         }
+        Write-Debug "Retrieving TFE_TOKEN from: $CliConfigFileRc for host: $Hostname"
         $Pattern = "credentials\s*`"$Hostname`"\s*{[\s\n]*token\s*=\s*\`"(.*)`""
         $Search = Get-Content -Raw $CliConfigFileRc | Select-String -Pattern $Pattern
         if ($Null -eq $Search.Matches) {
             Throw "Error extracting token from cli config: $CliConfigFileRc"
         }
         $Result = $Search.Matches.Groups[1].Value
+        Write-Verbose "TFE_TOKEN: $Result"
         return $Result
     }
     # Try credentials.tfrc.json
     $CliConfigFileTfrc = "$env:APPDATA/terraform.d/credentials.tfrc.json"
     if (Test-Path $CliConfigFileTfrc) {
+        Write-Debug "Retrieving TFE_TOKEN from: $CliConfigFileTfrc"
         if (!$Hostname) {
             $Hostname = 'app.terraform.io'
         }
@@ -1469,6 +1487,9 @@ try {
             $TerraformVersion = Get-TerraformVersion -BackendType $BackendType @FuncParam
             Write-ExecCmd -Header 'INFO' -Arguments "Detected Terraform Version: $TerraformVersion"
         }
+        else {
+            $TerraformVersion = Get-TerraformVersionText
+        }
 
     }
 
@@ -1563,6 +1584,10 @@ try {
 
     if ($GetCreatorToken) {
         Invoke-GetRolesetToken -TerraformPath $TerraformPath -RolesetName 'project_creator'
+    }
+
+    if ($GetToken) {
+        Invoke-GetRolesetToken -TerraformPath $TerraformPath -RolesetName $GetToken
     }
 
     if ($StatePull) {
