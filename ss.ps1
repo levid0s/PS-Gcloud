@@ -1,19 +1,21 @@
+## Send-Stream.ps1
+
 [CmdletBinding()]
 param(
     # Accept any pipeline input
-    [Parameter(ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
-    $InputObject,
+    [string] $FileType = "txt",
 
     # Optional: explicitly provide the path to Notepad++ (e.g., "C:\Program Files\Notepad++\notepad++.exe")
     [string] $Program,
 
     # Optional: also echo the prefixed lines back to the console while writing to file
     [switch] $AlsoEcho,
-
+    
     # Optional: choose a custom prefix (default is ">> ")
     [string] $Prefix = '',
 
-    [string] $FileType = "txt"
+    [Parameter(ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+    $InputObject
 )
 
 begin {
@@ -47,12 +49,23 @@ process {
 end {
     # Close the writer
     if ($script:sw) { $script:sw.Dispose() }
-
+    $global:File = $tempFile
+    Write-Information -InformationAction Continue "Exported file path: $File"
+    
     # Try to locate Notepad++
     $npp = $null
     if ($Program) {
         if (Get-Command $Program) { $npp = $Program }
         else { Write-Warning "Program '$Program' not found. Will try to auto-detect Notepad++." }
+    }
+    if (-not $npp) {
+        $cmd = Get-Command "code" -ErrorAction SilentlyContinue
+        if ($cmd) {
+            $npp = $cmd.Source 
+            & $npp $tempDir $tempFile
+            return $tempFil
+        }
+        
     }
     if (-not $npp) {
         $cmd = Get-Command "notepad++.exe" -ErrorAction SilentlyContinue

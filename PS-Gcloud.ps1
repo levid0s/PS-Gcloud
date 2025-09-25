@@ -58,7 +58,7 @@
 
 [CmdletBinding()]
 param(
-  [Parameter()][ValidateSet('Backend-Services', 'Compute', 'Configurations', 'Disks', 'Firewall', 'MIG', 'Snapshots', 'SQL', 'Storage')][string]$ResourceType,
+  [Parameter()][ValidateSet('Backend-Services', 'Compute', 'Configurations', 'Disks', 'Firewall', 'MIG', 'Projects', 'Snapshots', 'SQL', 'Storage')][string]$ResourceType,
   [nullable[bool]]$UseInternalIpSsh,
   [Parameter(Position = 0)][string]$Answer,
   [Switch]$Install,
@@ -72,6 +72,7 @@ param(
   [Switch]$Disks,
   [Switch]$Firewall,
   [Switch]$MIG,
+  [Switch]$Projects,
   [Switch]$Snapshots,
   [Switch]$SQL,
   [Switch]$Storage,
@@ -116,6 +117,7 @@ Pressing Enter at the prompt will re-execute the listing. Handy to see if a VM i
 .\PS-Gcloud.ps1 -Install                    # Add the location of the script in the user %PATH%
 $vms = .\PS-Gcloud.ps1 -ReturnAs-Object     # Returns the initial resource listing as object. The action will not be executed though.
 .\PS-Gcloud.ps1 -SelfLink                   # Add the relative self_link column to the selection table
+.\PS-Gcloud.ps1 -Projects [TODO]            # Provide project list in the output, instead of instance names   
 
 .\PS-Gcloud.ps1 -Disks a1=consumer-testvm -Show-Command   # Show the equivalent gcloud command instead of executing it
 
@@ -134,7 +136,7 @@ if ($Install -eq $true -and ![string]::IsNullOrEmpty($PSScriptRoot)) {
   return
 }
 
-$ResourceTypes = @('Backend-Services', 'Compute', 'Configurations', 'Disks', 'Firewall', 'MIG', 'Snapshots', 'SQL', 'Storage')
+$ResourceTypes = @('Backend-Services', 'Compute', 'Configurations', 'Disks', 'Firewall', 'MIG', 'Projects', 'Snapshots', 'SQL', 'Storage')
 $SelfLink = $SelfLink -or $Uri
 
 # Shorthand ResourceType switch validation
@@ -150,6 +152,33 @@ if ([string]::IsNullOrEmpty($ResourceType)) {
   if ([string]::IsNullOrEmpty($ResourceType)) {
     $ResourceType = 'Compute'
   }
+}
+
+# Projects
+if ($ResourceType -eq 'Projects') {
+  Write-Debug "ResourceType: $ResourceType"
+
+  $p0 = $(gcloud projects list --format=json | ConvertFrom-Json)
+  $p = $p0 | Select-Object `
+    name, `
+    projectId, `
+    projectNumber, `
+    createTime, `
+    lifecycleState, `
+  @{Name = 'labels_application'; Expression = { $_.labels.application } }, `
+  @{Name = 'labels_env'; Expression = { $_.labels.env } }, `
+  @{Name = 'labels_cmdb_id'; Expression = { $_.labels.cmdb_id } }, `
+  @{Name = 'labels_owner'; Expression = { $_.labels.owner } }, `
+  @{Name = 'labels_cost_center'; Expression = { $_.labels.cost_center } }, `
+  @{Name = 'labels_project_code'; Expression = { $_.labels.project_code } }, `
+  @{Name = 'labels_app_svc_name'; Expression = { $_.labels.app_svc_name } }, `
+  @{Name = 'labels_app_svc_id'; Expression = { $_.labels.app_svc_id } }, `
+  @{Name = 'parent_id'; Expression = { $_.parent.id } }, `
+  @{Name = 'parent_type'; Expression = { $_.parent.type } }
+
+  $p | ogv
+  # TODO
+  Return
 }
 
 . $PSScriptRoot/_PSGcloudHelper.ps1

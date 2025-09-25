@@ -360,10 +360,12 @@ function Get-TerraformInitDetails {
 }
 
 function Get-TerraformVersionRemote {
-    Write-Debug "Entering: Get-TerraformVersionRemote"
+    [CmdletBinding()]
     param(
         $TFERemoteDetails = @()
     )
+        
+    Write-Debug "Entering: Get-TerraformVersionRemote"
 
     $Hostname = $TFERemoteDetails.Hostname
     $Organization = $TFERemoteDetails.Organization
@@ -879,7 +881,7 @@ function Invoke-TerraformInit {
         }
 
         "DependencyLockFixNeeded" = @{
-            pattern = 'checksums recorded in the dependency lock file|: locked provider '
+            pattern = 'checksums recorded in the dependency lock file|: locked provider ?'
             message = 'Provider lock fix needed.'
             fix     = {
                 Invoke-TerraformProviderLockFix
